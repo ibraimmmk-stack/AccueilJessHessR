@@ -1,0 +1,641 @@
+name: Build APK
+on:
+  workflow_dispatch:
+  push:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generer le projet
+        run: |
+          set -e
+          mkdir -p LauncherLeger && cd LauncherLeger
+          mkdir -p app app/src/main app/src/main/java/dev/lite/launcher app/src/main/res/drawable app/src/main/res/mipmap-anydpi app/src/main/res/values
+          cat > settings.gradle.kts <<'LAUNCHER_EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "LauncherLeger"
+          include(":app")
+          LAUNCHER_EOF
+          cat > build.gradle.kts <<'LAUNCHER_EOF'
+          plugins {
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+          }
+          LAUNCHER_EOF
+          cat > gradle.properties <<'LAUNCHER_EOF'
+          org.gradle.jvmargs=-Xmx2g -Dfile.encoding=UTF-8
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          LAUNCHER_EOF
+          cat > app/build.gradle.kts <<'LAUNCHER_EOF'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+          }
+
+          android {
+              namespace = "dev.lite.launcher"
+              compileSdk = 35
+
+              defaultConfig {
+                  applicationId = "dev.lite.launcher"
+                  minSdk = 26
+                  targetSdk = 35
+                  versionCode = 1
+                  versionName = "1.0"
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = true
+                      isShrinkResources = true
+                      proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+                      // Signé avec la clé debug pour pouvoir l'installer directement.
+                      signingConfig = signingConfigs.getByName("debug")
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = "17" }
+          }
+
+          // Volontairement : AUCUNE dépendance (pas d'AppCompat, pas de RecyclerView, pas de Compose).
+          // Moins de code = démarrage plus rapide, moins de RAM, moins de CPU.
+          LAUNCHER_EOF
+          cat > app/proguard-rules.pro <<'LAUNCHER_EOF'
+          # Rien de spécial : pas de réflexion, pas de bibliothèque.
+          LAUNCHER_EOF
+          cat > app/src/main/AndroidManifest.xml <<'LAUNCHER_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <!-- Aucune permission. Cette balise suffit pour voir les apps lançables (Android 11+). -->
+              <queries>
+                  <intent>
+                      <action android:name="android.intent.action.MAIN" />
+                      <category android:name="android.intent.category.LAUNCHER" />
+                  </intent>
+              </queries>
+
+              <!-- Pas de Service, pas de Receiver, pas de Provider : rien ne tourne en arrière-plan. -->
+              <application
+                  android:allowBackup="false"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.Launcher">
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:excludeFromRecents="true"
+                      android:launchMode="singleTask"
+                      android:stateNotNeeded="true"
+                      android:taskAffinity=""
+                      android:windowSoftInputMode="adjustResize|stateHidden">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.HOME" />
+                          <category android:name="android.intent.category.DEFAULT" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          LAUNCHER_EOF
+          cat > app/src/main/res/values/strings.xml <<'LAUNCHER_EOF'
+          <resources>
+              <string name="app_name">Launcher Léger</string>
+          </resources>
+          LAUNCHER_EOF
+          cat > app/src/main/res/values/colors.xml <<'LAUNCHER_EOF'
+          <resources>
+              <color name="ic_bg">#1B1F3B</color>
+          </resources>
+          LAUNCHER_EOF
+          cat > app/src/main/res/values/themes.xml <<'LAUNCHER_EOF'
+          <resources>
+              <!-- Le fond d'écran est dessiné par le système : zéro coût pour nous. -->
+              <style name="Theme.Launcher" parent="android:Theme.Material.Wallpaper.NoTitleBar">
+                  <item name="android:windowShowWallpaper">true</item>
+                  <item name="android:windowBackground">@android:color/transparent</item>
+                  <item name="android:statusBarColor">@android:color/transparent</item>
+                  <item name="android:navigationBarColor">@android:color/transparent</item>
+              </style>
+          </resources>
+          LAUNCHER_EOF
+          cat > app/src/main/res/drawable/ic_launcher_foreground.xml <<'LAUNCHER_EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M54,32 L76,52 L70,52 L70,74 L58,74 L58,60 L50,60 L50,74 L38,74 L38,52 L32,52 Z" />
+          </vector>
+          LAUNCHER_EOF
+          cat > app/src/main/res/mipmap-anydpi/ic_launcher.xml <<'LAUNCHER_EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/ic_bg" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          LAUNCHER_EOF
+          cat > app/src/main/java/dev/lite/launcher/Apps.kt <<'LAUNCHER_EOF'
+          package dev.lite.launcher
+
+          import android.content.ComponentName
+          import android.content.Intent
+          import android.content.pm.PackageManager
+          import java.text.Collator
+          import java.text.Normalizer
+
+          const val ICON_DP = 48
+
+          private val MARKS = Regex("\\p{M}+")
+
+          /** Minuscules + sans accents, pour une recherche tolérante. */
+          fun normalize(s: String): String =
+              Normalizer.normalize(s, Normalizer.Form.NFD).replace(MARKS, "").lowercase()
+
+          class AppEntry(val label: String, val component: ComponentName) {
+              val key: String = component.flattenToShortString()
+              val norm: String = normalize(label)
+          }
+
+          object AppRepository {
+              @Suppress("DEPRECATION")
+              fun load(pm: PackageManager, selfPackage: String): List<AppEntry> {
+                  val query = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                  val collator = Collator.getInstance().apply { strength = Collator.PRIMARY }
+                  return pm.queryIntentActivities(query, 0)
+                      .filter { it.activityInfo.packageName != selfPackage }
+                      .map {
+                          AppEntry(
+                              it.loadLabel(pm).toString(),
+                              ComponentName(it.activityInfo.packageName, it.activityInfo.name)
+                          )
+                      }
+                      .sortedWith(Comparator<AppEntry> { a, b -> collator.compare(a.label, b.label) })
+              }
+          }
+          LAUNCHER_EOF
+          cat > app/src/main/java/dev/lite/launcher/IconLoader.kt <<'LAUNCHER_EOF'
+          package dev.lite.launcher
+
+          import android.content.pm.PackageManager
+          import android.graphics.Bitmap
+          import android.graphics.Canvas
+          import android.os.Handler
+          import android.os.Looper
+          import android.util.LruCache
+          import android.widget.ImageView
+          import java.util.concurrent.Executors
+
+          /**
+           * Charge les icônes À LA DEMANDE (seulement celles qui deviennent visibles),
+           * sur un thread de priorité minimale, avec un petit cache mémoire borné.
+           */
+          class IconLoader(private val pm: PackageManager, private val sizePx: Int) {
+
+              private val main = Handler(Looper.getMainLooper())
+
+              private val executor = Executors.newSingleThreadExecutor { r ->
+                  Thread(r, "icon-loader").apply {
+                      priority = Thread.MIN_PRIORITY
+                      isDaemon = true
+                  }
+              }
+
+              // ~1/32 du tas max (≈ 8 Mo sur 256 Mo)
+              private val cache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 32).toInt()) {
+                  override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
+              }
+
+              fun bind(view: ImageView, entry: AppEntry) {
+                  view.tag = entry.key
+                  val hit = cache.get(entry.key)
+                  if (hit != null) {
+                      view.setImageBitmap(hit)
+                      return
+                  }
+                  view.setImageDrawable(null)
+                  try {
+                      executor.execute {
+                          // La cellule a déjà été recyclée pour une autre app (scroll rapide) : on ne fait rien.
+                          if (view.tag != entry.key) return@execute
+                          val bmp = cache.get(entry.key) ?: render(entry) ?: return@execute
+                          cache.put(entry.key, bmp)
+                          main.post { if (view.tag == entry.key) view.setImageBitmap(bmp) }
+                      }
+                  } catch (_: Exception) {
+                      // Exécuteur arrêté (activité détruite) : rien à faire.
+                  }
+              }
+
+              private fun render(entry: AppEntry): Bitmap? = try {
+                  val d = pm.getActivityIcon(entry.component)
+                  val b = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+                  d.setBounds(0, 0, sizePx, sizePx)
+                  d.draw(Canvas(b))
+                  b
+              } catch (_: Exception) {
+                  null
+              }
+
+              fun shutdown() {
+                  executor.shutdownNow()
+              }
+          }
+          LAUNCHER_EOF
+          cat > app/src/main/java/dev/lite/launcher/AppAdapter.kt <<'LAUNCHER_EOF'
+          package dev.lite.launcher
+
+          import android.content.Context
+          import android.graphics.Color
+          import android.text.TextUtils
+          import android.view.Gravity
+          import android.view.View
+          import android.view.ViewGroup
+          import android.widget.AbsListView
+          import android.widget.BaseAdapter
+          import android.widget.ImageView
+          import android.widget.LinearLayout
+          import android.widget.TextView
+
+          class AppAdapter(private val ctx: Context, private val icons: IconLoader) : BaseAdapter() {
+
+              private var items: List<AppEntry> = emptyList()
+
+              fun submit(list: List<AppEntry>) {
+                  items = list
+                  notifyDataSetChanged()
+              }
+
+              fun first(): AppEntry? = items.firstOrNull()
+
+              override fun getCount(): Int = items.size
+              override fun getItem(position: Int): AppEntry = items[position]
+              override fun getItemId(position: Int): Long = position.toLong()
+
+              override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                  val cell = (convertView as? LinearLayout) ?: newCell()
+                  val entry = items[position]
+                  (cell.getChildAt(1) as TextView).text = entry.label
+                  icons.bind(cell.getChildAt(0) as ImageView, entry)
+                  return cell
+              }
+
+              private fun newCell(): LinearLayout {
+                  val density = ctx.resources.displayMetrics.density
+                  fun dp(v: Int) = (v * density + 0.5f).toInt()
+
+                  val icon = ImageView(ctx).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
+                  val label = TextView(ctx).apply {
+                      textSize = 12f
+                      setTextColor(Color.WHITE)
+                      setShadowLayer(3f, 0f, 1f, Color.BLACK)
+                      maxLines = 1
+                      ellipsize = TextUtils.TruncateAt.END
+                      gravity = Gravity.CENTER
+                  }
+                  return LinearLayout(ctx).apply {
+                      orientation = LinearLayout.VERTICAL
+                      gravity = Gravity.CENTER_HORIZONTAL
+                      setPadding(dp(4), dp(10), dp(4), dp(6))
+                      layoutParams = AbsListView.LayoutParams(
+                          AbsListView.LayoutParams.MATCH_PARENT,
+                          AbsListView.LayoutParams.WRAP_CONTENT
+                      )
+                      addView(icon, LinearLayout.LayoutParams(dp(ICON_DP), dp(ICON_DP)))
+                      addView(
+                          label,
+                          LinearLayout.LayoutParams(
+                              LinearLayout.LayoutParams.MATCH_PARENT,
+                              LinearLayout.LayoutParams.WRAP_CONTENT
+                          ).apply { topMargin = dp(4) }
+                      )
+                  }
+              }
+          }
+          LAUNCHER_EOF
+          cat > app/src/main/java/dev/lite/launcher/MainActivity.kt <<'LAUNCHER_EOF'
+          package dev.lite.launcher
+
+          import android.app.Activity
+          import android.app.AlertDialog
+          import android.content.Intent
+          import android.content.SharedPreferences
+          import android.graphics.Color
+          import android.graphics.drawable.ColorDrawable
+          import android.graphics.drawable.GradientDrawable
+          import android.net.Uri
+          import android.os.Build
+          import android.os.Bundle
+          import android.provider.Settings
+          import android.text.Editable
+          import android.text.TextWatcher
+          import android.view.Gravity
+          import android.view.View
+          import android.view.ViewGroup
+          import android.view.WindowInsets
+          import android.view.inputmethod.EditorInfo
+          import android.view.inputmethod.InputMethodManager
+          import android.widget.EditText
+          import android.widget.GridView
+          import android.widget.ImageView
+          import android.widget.LinearLayout
+          import android.widget.Toast
+          import java.util.concurrent.Executors
+          import kotlin.math.max
+
+          /**
+           * Écran d'accueil minimaliste.
+           *
+           * Principe d'économie d'énergie : l'appli ne fait RIEN tant qu'elle n'est pas à l'écran.
+           *  - pas de Service / Receiver / WorkManager / alarme / wakelock / réseau
+           *  - installs/désinstalls détectés par getChangedPackages() au retour sur l'accueil (pas d'écoute permanente)
+           *  - icônes chargées à la demande, fond d'écran dessiné par le système
+           */
+          class MainActivity : Activity() {
+
+              companion object {
+                  /** true = fond noir pur (économise de la batterie sur écran AMOLED) au lieu du fond d'écran. */
+                  const val AMOLED_BLACK = false
+                  private const val DOCK_MAX = 5
+                  private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
+                  private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
+              }
+
+              private lateinit var prefs: SharedPreferences
+              private lateinit var icons: IconLoader
+              private lateinit var appAdapter: AppAdapter
+              private lateinit var search: EditText
+              private lateinit var grid: GridView
+              private lateinit var dock: LinearLayout
+
+              private val io = Executors.newSingleThreadExecutor { r ->
+                  Thread(r, "launcher-io").apply {
+                      priority = Thread.MIN_PRIORITY
+                      isDaemon = true
+                  }
+              }
+
+              private var all: List<AppEntry> = emptyList()
+              private var byKey: Map<String, AppEntry> = emptyMap()
+              private var changeSeq = 0
+              private var loading = false
+
+              private fun dp(v: Int) = (v * resources.displayMetrics.density + 0.5f).toInt()
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  prefs = getSharedPreferences("launcher", MODE_PRIVATE)
+                  icons = IconLoader(packageManager, dp(ICON_DP))
+                  appAdapter = AppAdapter(this, icons)
+
+                  if (Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(false)
+
+                  search = EditText(this).apply {
+                      hint = "Rechercher"
+                      setHintTextColor(Color.argb(153, 255, 255, 255))
+                      setTextColor(Color.WHITE)
+                      setSingleLine()
+                      textSize = 15f
+                      imeOptions = EditorInfo.IME_ACTION_SEARCH
+                      setPadding(dp(16), dp(10), dp(16), dp(10))
+                      background = GradientDrawable().apply {
+                          setColor(Color.argb(51, 255, 255, 255))
+                          cornerRadius = dp(24).toFloat()
+                      }
+                      addTextChangedListener(object : TextWatcher {
+                          override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+                          override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+                          override fun afterTextChanged(s: Editable?) = applyFilter()
+                      })
+                      setOnEditorActionListener { _, _, _ ->
+                          appAdapter.first()?.let { launch(it) }
+                          true
+                      }
+                  }
+
+                  grid = GridView(this).apply {
+                      numColumns = max(4, resources.configuration.screenWidthDp / 84)
+                      adapter = appAdapter
+                      selector = ColorDrawable(Color.argb(34, 255, 255, 255))
+                      overScrollMode = View.OVER_SCROLL_NEVER
+                      isVerticalScrollBarEnabled = false
+                      setOnItemClickListener { _, _, pos, _ -> launch(appAdapter.getItem(pos)) }
+                      setOnItemLongClickListener { _, _, pos, _ ->
+                          showMenu(appAdapter.getItem(pos))
+                          true
+                      }
+                  }
+
+                  dock = LinearLayout(this).apply {
+                      orientation = LinearLayout.HORIZONTAL
+                      gravity = Gravity.CENTER
+                      setPadding(dp(8), dp(8), dp(8), dp(8))
+                      background = GradientDrawable().apply {
+                          setColor(Color.argb(51, 255, 255, 255))
+                          cornerRadius = dp(28).toFloat()
+                      }
+                      visibility = View.GONE
+                  }
+
+                  val m = dp(12)
+                  val root = LinearLayout(this).apply {
+                      orientation = LinearLayout.VERTICAL
+                      setBackgroundColor(if (AMOLED_BLACK) Color.BLACK else Color.argb(102, 0, 0, 0))
+                      // Le conteneur prend le focus : évite que la barre de recherche ouvre le clavier au démarrage.
+                      descendantFocusability = ViewGroup.FOCUS_BEFORE_DESCENDANTS
+                      isFocusableInTouchMode = true
+                      addView(search, LinearLayout.LayoutParams(MATCH, WRAP).apply { setMargins(m, m, m, m / 2) })
+                      addView(grid, LinearLayout.LayoutParams(MATCH, 0, 1f))
+                      addView(dock, LinearLayout.LayoutParams(MATCH, WRAP).apply { setMargins(m, m / 2, m, m) })
+                  }
+
+                  if (Build.VERSION.SDK_INT >= 30) {
+                      root.setOnApplyWindowInsetsListener { v, insets ->
+                          val i = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
+                          v.setPadding(i.left, i.top, i.right, i.bottom)
+                          insets
+                      }
+                  } else {
+                      @Suppress("DEPRECATION")
+                      root.fitsSystemWindows = true
+                  }
+
+                  setContentView(root)
+              }
+
+              override fun onStart() {
+                  super.onStart()
+                  // Appel très léger : renvoie null s'il n'y a eu aucun changement de paquets.
+                  if (all.isEmpty() || packageManager.getChangedPackages(changeSeq) != null) reload()
+              }
+
+              override fun onNewIntent(intent: Intent) {
+                  super.onNewIntent(intent)
+                  if (intent.hasCategory(Intent.CATEGORY_HOME)) resetUi()
+              }
+
+              @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+              override fun onBackPressed() {
+                  // Un lanceur ne se ferme pas : Retour sert seulement à vider la recherche.
+                  if (search.text.isNotEmpty() || search.hasFocus()) resetUi()
+              }
+
+              override fun onDestroy() {
+                  io.shutdownNow()
+                  icons.shutdown()
+                  super.onDestroy()
+              }
+
+              // ───────────────────────── chargement ─────────────────────────
+
+              private fun reload() {
+                  if (loading) return
+                  loading = true
+                  io.execute {
+                      val pm = packageManager
+                      val seq = pm.getChangedPackages(changeSeq)?.sequenceNumber ?: changeSeq
+                      val apps = AppRepository.load(pm, packageName)
+                      runOnUiThread {
+                          loading = false
+                          if (isDestroyed) return@runOnUiThread
+                          changeSeq = seq
+                          all = apps
+                          byKey = apps.associateBy { it.key }
+                          applyFilter()
+                          renderDock()
+                      }
+                  }
+              }
+
+              private fun applyFilter() {
+                  val q = normalize(search.text.toString().trim())
+                  appAdapter.submit(if (q.isEmpty()) all else all.filter { it.norm.contains(q) })
+              }
+
+              // ───────────────────────── actions ─────────────────────────
+
+              private fun launch(e: AppEntry) {
+                  val i = Intent(Intent.ACTION_MAIN)
+                      .addCategory(Intent.CATEGORY_LAUNCHER)
+                      .setComponent(e.component)
+                      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                  try {
+                      startActivity(i)
+                  } catch (_: Exception) {
+                      Toast.makeText(this, "Impossible d’ouvrir ${e.label}", Toast.LENGTH_SHORT).show()
+                      reload()
+                  }
+              }
+
+              private fun showMenu(e: AppEntry) {
+                  val isFav = favs().contains(e.key)
+                  val items = arrayOf(
+                      if (isFav) "Retirer du dock" else "Ajouter au dock",
+                      "Infos de l’application"
+                  )
+                  AlertDialog.Builder(this)
+                      .setTitle(e.label)
+                      .setItems(items) { _, which ->
+                          when (which) {
+                              0 -> toggleFav(e)
+                              1 -> try {
+                                  startActivity(
+                                      Intent(
+                                          Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                          Uri.fromParts("package", e.component.packageName, null)
+                                      )
+                                  )
+                              } catch (_: Exception) {
+                              }
+                          }
+                      }
+                      .show()
+              }
+
+              private fun resetUi() {
+                  if (search.text.isNotEmpty()) search.text.clear()
+                  search.clearFocus()
+                  getSystemService(InputMethodManager::class.java)
+                      ?.hideSoftInputFromWindow(search.windowToken, 0)
+                  grid.setSelection(0)
+              }
+
+              // ───────────────────────── dock ─────────────────────────
+
+              private fun favs(): MutableList<String> =
+                  (prefs.getString("dock", "") ?: "").split(',').filter { it.isNotEmpty() }.toMutableList()
+
+              private fun toggleFav(e: AppEntry) {
+                  val list = favs()
+                  if (!list.remove(e.key)) {
+                      if (list.size >= DOCK_MAX) {
+                          Toast.makeText(this, "Dock plein ($DOCK_MAX max)", Toast.LENGTH_SHORT).show()
+                          return
+                      }
+                      list.add(e.key)
+                  }
+                  prefs.edit().putString("dock", list.joinToString(",")).apply()
+                  renderDock()
+              }
+
+              private fun renderDock() {
+                  dock.removeAllViews()
+                  val entries = favs().mapNotNull { byKey[it] }
+                  dock.visibility = if (entries.isEmpty()) View.GONE else View.VISIBLE
+                  for (e in entries) {
+                      val iv = ImageView(this).apply {
+                          scaleType = ImageView.ScaleType.FIT_CENTER
+                          setPadding(dp(8), dp(4), dp(8), dp(4))
+                          setOnClickListener { launch(e) }
+                          setOnLongClickListener {
+                              showMenu(e)
+                              true
+                          }
+                      }
+                      dock.addView(iv, LinearLayout.LayoutParams(0, dp(ICON_DP + 8), 1f))
+                      icons.bind(iv, e)
+                  }
+              }
+          }
+          LAUNCHER_EOF
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: SDK Android
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0"
+      - name: Compiler
+        working-directory: LauncherLeger
+        run: gradle assembleRelease --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LauncherLeger-APK
+          path: LauncherLeger/app/build/outputs/apk/release/*.apk
